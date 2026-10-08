@@ -1,0 +1,40 @@
+Restore GitLab SSO login flags in Team Edition (Phoenix Nest build).
+
+Mattermost v11.0 moved the GitLab client-config flags inside the licence
+block (mattermost/mattermost#33848, "Move Gitlab SSO to Professional").
+At tag v11.11.1 they sit in server/config/client.go:428-430, inside
+`if license != nil {` (line 390) and `if *license.Features.OpenId {`
+(line 424). Without a licence, EnableSignUpWithGitLab is absent from the
+client config and the stock webapp hides the GitLab button.
+
+This patch moves those three lines out of the licence block, back to
+where v10.11 set them unconditionally. The GitLab provider itself is
+AGPL code and is still compiled in (server/cmd/mattermost/main.go:13).
+Nothing in server/enterprise/ is touched.
+
+--- a/server/config/client.go
++++ b/server/config/client.go
+@@ -387,6 +387,13 @@ func GenerateLimitedClientConfig(c *model.Config, telemetryID string, license *m
+ 	props["GuestAccountsEnforceMultifactorAuthentication"] = strconv.FormatBool(*c.GuestAccountsSettings.EnforceMultifactorAuthentication)
+ 	props["EnableGuestMagicLink"] = strconv.FormatBool(*c.GuestAccountsSettings.EnableGuestMagicLink)
+
++	// Phoenix Nest: GitLab SSO is AGPL code still compiled into Team Edition.
++	// Expose its login flags without a licence, as before v11.0
++	// (partial revert of mattermost/mattermost#33848).
++	props["EnableSignUpWithGitLab"] = strconv.FormatBool(*c.GitLabSettings.Enable)
++	props["GitLabButtonColor"] = *c.GitLabSettings.ButtonColor
++	props["GitLabButtonText"] = *c.GitLabSettings.ButtonText
++
+ 	if license != nil {
+ 		if *license.Features.LDAP {
+ 			props["EnableLdap"] = strconv.FormatBool(*c.LdapSettings.Enable)
+@@ -425,9 +432,6 @@ func GenerateLimitedClientConfig(c *model.Config, telemetryID string, license *m
+ 			props["EnableSignUpWithOpenId"] = strconv.FormatBool(*c.OpenIdSettings.Enable)
+ 			props["OpenIdButtonColor"] = *c.OpenIdSettings.ButtonColor
+ 			props["OpenIdButtonText"] = *c.OpenIdSettings.ButtonText
+-			props["EnableSignUpWithGitLab"] = strconv.FormatBool(*c.GitLabSettings.Enable)
+-			props["GitLabButtonColor"] = *c.GitLabSettings.ButtonColor
+-			props["GitLabButtonText"] = *c.GitLabSettings.ButtonText
+ 		}
+
+ 		if model.MinimumEnterpriseLicense(license) {

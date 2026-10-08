@@ -1,0 +1,55 @@
+# Throwaway stack for test-local.sh. Never point this at a real database.
+# Postgres sits on an internal-only network; Mattermost is published on
+# 127.0.0.1 only. All credentials below are fake and local to this stack.
+name: mmphoenixtest
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mmtest
+      POSTGRES_PASSWORD: mmtest-throwaway
+      POSTGRES_DB: mattermost
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mmtest -d mattermost"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mm:
+    image: ${MM_IMAGE:?set MM_IMAGE}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mmtest:mmtest-throwaway@db:5432/mattermost?sslmode=disable&connect_timeout=10
+      MM_SERVICESETTINGS_SITEURL: http://127.0.0.1:${MM_PORT:-18065}
+      MM_LOGSETTINGS_ENABLEDIAGNOSTICS: "false"
+      MM_PLUGINSETTINGS_ENABLEMARKETPLACE: "false"
+      MM_GITLABSETTINGS_ENABLE: ${GL_ENABLE:-false}
+      MM_GITLABSETTINGS_ID: ${GL_ID:-}
+      MM_GITLABSETTINGS_SECRET: ${GL_SECRET:-}
+      MM_GITLABSETTINGS_SCOPE: ""
+      MM_GITLABSETTINGS_AUTHENDPOINT: ${GL_AUTH:-}
+      MM_GITLABSETTINGS_TOKENENDPOINT: ${GL_TOKEN:-}
+      MM_GITLABSETTINGS_USERAPIENDPOINT: ${GL_USERAPI:-}
+    volumes:
+      - mmconfig:/mattermost/config
+      - mmdata:/mattermost/data
+    ports:
+      - "127.0.0.1:${MM_PORT:-18065}:8065"
+    networks: [backend, front]
+
+networks:
+  backend:
+    internal: true
+  front: {}
+
+volumes:
+  dbdata: {}
+  mmconfig: {}
+  mmdata: {}
